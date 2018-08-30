@@ -85,8 +85,8 @@ local callback = function(message, reply)
     ngx.say(cjson.encode(data))
 end
 
--- client:request(urii, cjson.encode(param), callback)
-client:request("nserver.hello.world", cjson.encode(param), callback)
+client:request(uri, cjson.encode(param), callback)
+-- client:request("nserver.hello.world", cjson.encode(param), callback)
 
 local ok, err = c:set_keepalive(10000, 100)
 if not ok then
