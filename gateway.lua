@@ -7,22 +7,20 @@ local nats_port = 4222
 local env = "production"
 
 
-local c = nats:new()
-local ok, err = c:connect(nats_host, nats_port)
+local client = nats:new()
+local ok, err = client:connect(nats_host, nats_port)
 if not ok then
     ngx.log(ngx.ERR, err)
     return
 end
 
-local count
-local client = c:get_client()
-
-count, err = c:get_reused_times()
-if 0 == count then
-    client:connect() 
-elseif err then
-    ngx.log(ngx.ERR, err)
-end
+--local count
+--count, err = client:get_reused_times()
+--if err then
+--    ngx.log(ngx.ERR, err)
+--    return
+--end
+--ngx.say('reuse count:', count)
 
 -- request 
 local uri = ngx.var.uri
@@ -59,11 +57,12 @@ if not err then
     param["COOKIE"] = cookies
 end
 
-local callback = function(message, reply)
-    if string.find(message, "COOKIE") == nil then
-        ngx.say(message)
-        return
-    end
+--client:request(uri, cjson.encode(param), callback)
+local message = client:request("production.cre.user.validate", cjson.encode(param))
+
+if string.find(message, "COOKIE") == nil then
+    ngx.say(message)
+else
     local data = cjson.decode(message)
     local cks = data["COOKIE"]
     if cks ~= nil then
@@ -75,9 +74,9 @@ local callback = function(message, reply)
                 domain = v["Domain"],
                 secure = v["Secure"],
                 httponly = v["HttpOnly"],
-                expires = v["Expires"], 
-                max_age = v["MaxAge"],
-                samesite = v["SameSite"]
+                expires = v["RawExpires"], 
+                -- max_age = v["MaxAge"],
+                samesite = (v["SameSite"] == 0 and "Lax") or "Strict" 
             })
         end
         data["COOKIE"] = nil
@@ -85,11 +84,8 @@ local callback = function(message, reply)
     ngx.say(cjson.encode(data))
 end
 
-client:request(uri, cjson.encode(param), callback)
--- client:request("nserver.hello.world", cjson.encode(param), callback)
-
-local ok, err = c:set_keepalive(10000, 100)
-if not ok then
-    ngx.log(ngx.ERR, err)
-    return
-end
+--local ok, err = client:set_keepalive(10000, 10000)
+--if not ok then
+--    ngx.log(ngx.ERR, err)
+--    return
+--end
