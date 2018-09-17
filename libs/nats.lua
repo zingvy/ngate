@@ -1,8 +1,6 @@
 -- ### Library requirements ###
 
-local cjson  = require('cjson')
 local uuid   = require('uuid')
-
 
 local tcp = ngx.socket.tcp
 local setmetatable = setmetatable
@@ -78,14 +76,13 @@ local function close(self)
 end
 _M.close = close
 
-
-local function _sock_read(sock)
+local function _sock_read(sock, len)
     if len == nil then len = '*l' end
     local line, err = sock:receive(len)
     if not err then
         return line, nil
     else
-	return nil, err
+        return nil, err
     end
 end
 
@@ -118,12 +115,15 @@ local function _read_reply(sock)
         data.action    = 'MSG'
         data.subject   = slices[2]
         data.unique_id = slices[3]
+
         -- ask for line ending chars and remove them
         if #slices == 4 then
-            data.content = _sock_read(sock, slices[4]+2):sub(1, -3)
+            local read_result, _ = _sock_read(sock, slices[4]+2)
+            data.content = read_result:sub(1,-3)
         else
-            data.reply   = slices[4]
-            data.content = _sock_read(sock, slices[5]+2):sub(1, -3)
+            data.reply = slices[4]
+            local read_result, _ = _sock_read(sock, slices[5]+2)
+            data.content = read_result:sub(1,-3)
         end
 
     -- INFO
@@ -139,11 +139,10 @@ local function _read_reply(sock)
     elseif slices[1] == '-ERR' then
         data.action  = 'ERROR'
 
-   -- unknown type of reply
+    -- unknown type of reply
     else
-	return nil, 'unknown response' .. payload
+	    return nil, 'unknown response' .. payload
     end
-
     return data, nil
 end
 
@@ -161,10 +160,10 @@ function _M.request(self, subject, payload)
     local inbox = create_inbox()
     local unique_id = uuid()
 
-    _raw_send(sock, 'SUB '..subject..' '..unique_id..'\r\n')
+    _raw_send(sock, 'SUB '..inbox..' '..unique_id..'\r\n')
     self:publish(subject, payload, inbox)
 
-    local data = self:read()
+    local data = self:read(unique_id)
     
     _raw_send(sock, 'UNSUB '..unique_id..'\r\n')
     return data
@@ -184,23 +183,32 @@ function _M.publish(self, subject, payload, reply)
     _raw_send(sock, 'PUB '..subject..reply..' '..#payload..'\r\n'..payload..'\r\n')
 end
 
-function _M.read(self)
+function _M.read(self, unique_id)
     local sock = rawget(self, "_sock")
     if not sock then
         return nil, "not initialized"
     end
 
-    local count = 0
+    local result = nil
     repeat
-        local data = _read_reply(sock)
-
+        local data, _ = _read_reply(sock)
         if data.action == 'PING' then
             _raw_send(sock, 'PONG\r\n')
-
-        elseif data.action == 'MSG' then
-            return data.content
+        elseif data.action == 'MSG' and data.unique_id == unique_id then
+            result = data.content
         end
-    until count > 0
+    until result ~= nil 
+    return result
+end
+
+function _M.empty_buffer(self)
+    local sock = rawget(self, "_sock")
+    if not sock then
+        return nil, "not initialized"
+    end
+
+    _read_reply(sock)
+    return 
 end
 
 return _M

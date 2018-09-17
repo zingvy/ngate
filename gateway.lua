@@ -14,13 +14,13 @@ if not ok then
     return
 end
 
---local count
---count, err = client:get_reused_times()
---if err then
---    ngx.log(ngx.ERR, err)
---    return
---end
---ngx.say('reuse count:', count)
+local count
+count, err = client:get_reused_times()
+if err then
+    ngx.log(ngx.ERR, err)
+    return
+end
+ngx.say('reuse count:', count)
 
 -- request 
 local uri = ngx.var.uri
@@ -58,7 +58,7 @@ if not err then
 end
 
 --client:request(uri, cjson.encode(param), callback)
-local message = client:request("production.cre.user.validate", cjson.encode(param))
+local message = client:request("nserver.hello.world", cjson.encode(param))
 
 if string.find(message, "COOKIE") == nil then
     ngx.say(message)
@@ -84,8 +84,8 @@ else
     ngx.say(cjson.encode(data))
 end
 
---local ok, err = client:set_keepalive(10000, 10000)
+--ok, err = client:set_keepalive(10000, 100)
 --if not ok then
---    ngx.log(ngx.ERR, err)
---    return
+--    ngx.say("set keep alive failed", err)
+--    client:close()
 --end
